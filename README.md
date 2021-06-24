@@ -1,1 +1,4 @@
-# Regression-analysis-in-R
+This is a project that I undertook as part of one of my modules during my time at UCL. 
+The dataset is represented by the file grocery.csv and it contains a sample of sales and promotional information of 12 products from a set of grocery stores over a subset of a period of 156 weeks, beginning January 2009 through December 2011. All 12 products belong to the frozen pizza category. The response variable is how many units of product were sold during that period and all the independent variables represent features that are specific to each product. 
+The project includes an initial exploratory analysis of the data, as well as a selection of models within the linear and generalized linear regression range, random forests etc which are applied to the data and from which, one best performing model is chosen. 
+The code is accompanied by a PDF report summarizing the findings of the analysis. 
