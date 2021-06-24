@@ -1,0 +1,551 @@
+---
+title: '16096156'
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r}
+#Read the data into a data frame:
+grocery <- read.csv('grocery.csv', header = TRUE)
+```
+
+# Section 1. Exploratory analysis
+```{r}
+par(mfrow=c(1, 2))
+hist(grocery$UNITS, main = "Histogram of units sold", xlab = "Units sold")
+cat("The histogram of the response variable shows a clear positive skew in the data. That, 
+combined with the fact that the data is bounded by 0, suggests it might be sensible to apply a
+logarithmic transformation to the response variable to normalize its distribution (represented
+below).")
+UNITS_LOG = log(grocery$UNITS)
+grocery_log <- cbind(grocery, UNITS_LOG, deparse.level = 1)
+hist(UNITS_LOG, main = "Histogram of the logarithm of units sold", xlab = "log(units sold)")
+
+```
+
+```{r include=FALSE}
+#Plot price categories vs total units sold in that category
+plot(grocery$PRICE, grocery$UNITS, main = "Units sold vs price", 
+     xlab = "Price", ylab = "Units")
+```
+
+```{r}
+cat("We would like to explore first the relationship between price and sales. However, the
+basic units vs price plot is not particularly helpful, therefore we show below the total units 
+sold at each price level (rounded to integers). It seems that pizza that is priced more 
+moderately has sold significantly more units compared to what can be described as cheap(<3) 
+or expensive pizza(>7). Secondly, as it relates to manufacturers, Private Label(PL) and 
+Tombstone(TMB) are the best sellers, whereas Tonys(TNY) and King(KNG) are lagging behind 
+on units sold. This means that certain manufacturers may bring more sales, which can be 
+further explored through more advanced analysis. Lastly, when it comes to marketing efforts, 
+it appears as though putting the product on in-store promotional display (D) or featuring it 
+in the store leaflet (F) generates significantly more selling activity than just a price 
+reduction (TPR). Again,this relationship should be further explored through more advanced 
+analysis.", "\n")
+par(mfrow=c(1, 1))
+price_categ <- rep(c(1, 2, 3, 4, 5, 6, 7, 8))
+units_sum <- rep(c(1), 8)
+for (i in seq(1:8)) {
+  units_sum[i] <- sum(grocery$UNITS[floor(grocery$PRICE) == i ])
+}
+plot(price_categ, units_sum, main = "Total units sold per price level", 
+     xlab = "Price level", ylab ="Total units", type ="b")
+
+#To help in analyzing the categorical variables MANUFACTURER, UPC and STORE_NUM, 
+#we create dummy variables for each of them, using the fastDummies package:
+library("fastDummies")
+grocery <- dummy_cols(grocery, select_columns = c('STORE_NUM', 'MANUFACTURER', 'UPC'))
+par(mfrow=c(1, 2))
+#We then proceed to calculate the total units sold per each manufacturer. 
+privatelabel <- sum(grocery$UNITS[grocery$`MANUFACTURER_PRIVATE LABEL` == 1])
+tonys <- sum(grocery$UNITS[grocery$`MANUFACTURER_TONYS`==1])
+tombstone <- sum(grocery$UNITS[grocery$`MANUFACTURER_TOMBSTONE` == 1])
+king <- sum(grocery$UNITS[grocery$`MANUFACTURER_KING` == 1])
+manufacturers = c(privatelabel, tonys, tombstone, king)
+barplot(manufacturers, names.arg = c("PL", "TNY", "TMB", "KNG"), 
+        col = c("blue", "yellow", "green", "red"), 
+        main = "Sales by manufacturer", ylab = "Total units sold", xlab = "Manufacturer")
+#Below we also show total units sold depending on marketing action (DISPLAY, FEATURE or
+#TPR_ONLY):
+display <- grocery$UNITS[grocery$DISPLAY == 1]
+feature <- grocery$UNITS [grocery$FEATURE == 1]
+TPR <- grocery$UNITS[grocery$TPR_ONLY == 1 ]
+action <- c(sum(display), sum(feature), sum(TPR))
+barplot(action, names.arg = c("D", "F", "TPR"), 
+        col = c("blue", "red", "yellow"), main = "Sales per marketing action", 
+        xlab = "Marketing action", ylab = "Total units sold")
+```
+
+```{r include=FALSE}
+# Plot units sold per week
+par(mfrow=c(1, 3))
+plot(grocery$WEEK_END_DATE, grocery$UNITS, main = "Raw units vs week", 
+     xlab = "Date: week end", ylab = "Units sold")
+unique_weeks <- unique(grocery$WEEK_END_DATE)
+count <- length(unique_weeks)
+unique_weeks <- sort(unique_weeks)
+units_sumw <- rep(c(1), count)
+units_meanw <- rep(c(1), count)
+for (i in 1:count) {
+  units_sumw[i] <- sum(grocery$UNITS[grocery$WEEK_END_DATE ==unique_weeks[i]])
+  units_meanw[i] <- mean(grocery$UNITS[grocery$WEEK_END_DATE ==unique_weeks[i]])
+}
+halfyear <- seq(from = 1, to = 156, by = 26)
+scatter.smooth(unique_weeks, units_sumw, axes = FALSE, main = "Total units sold each week", 
+               xlab = "Week", ylab ="Total units sold")
+axis(side = 1, at = unique_weeks[halfyear], labels = c("Jan-09", "Jul-09", "Jan-10", "Jul-10",
+                                         "Jan-11", "Jul-11"), tick = TRUE)
+scatter.smooth(unique_weeks, units_meanw, axes = FALSE, main = "Average units sold each week", 
+               xlab = "Week", ylab ="Average units sold")
+axis(side = 1, at = unique_weeks[halfyear], labels = c("Jan-09", "Jul-09", "Jan-10", "Jul-10",
+                                                       "Jan-11", "Jul-11"), tick = TRUE)
+#Additionally, there are no particular trends indicating a strong relationship between the
+#week and the total/ average of units sold.
+#Only a very slight upward trend can be spotted in total units sold with time, 
+#while only a very slight downward trend can be spotted in average units sold 
+#with time, however none of these points towards a significant relationship.
+```
+
+```{r include=FALSE}
+#We also explore any potential relationship between PRICE / BASE_PRICE and 
+#STORE_NUM or UPC:
+par(mfrow=c(2, 2))
+boxplot(grocery$PRICE~grocery$STORE_NUM)
+boxplot(grocery$PRICE~grocery$UPC)
+boxplot(grocery$BASE_PRICE~grocery$STORE_NUM)
+boxplot(grocery$BASE_PRICE~grocery$UPC)
+#It appears as three types of products are priced significantly lower than the rest. 
+#However, we know from previous analysis (see relationship between price and 
+#sales above) that significantly cheaper products do not necessarily sell better 
+#(quite the contrary), therefore it might not necessarily mean that the products
+#that are priced more cheaply generate higher sales. This analysis is not particularly
+#useful for our purposes. 
+```
+
+```{r, include = FALSE}
+grocery$MANUFACTURER <- as.numeric(as.factor(grocery$MANUFACTURER))
+corel <- cor(grocery, method = c("pearson"))
+print(corel)
+```
+
+```{r, include = FALSE}
+a = cor.test(grocery$BASE_PRICE, grocery$PRICE)
+b = cor.test(grocery$BASE_PRICE, grocery$UPC)
+c = cor.test(grocery$BASE_PRICE, grocery$MANUFACTURER)
+d = cor.test(grocery$PRICE, grocery$UPC)
+e = cor.test(grocery$UPC, grocery$MANUFACTURER)
+f = cor.test(grocery$FEATURE, grocery$DISPLAY)
+
+cat("P-value of the correlation coefficient between BASE_PRICE and PRICE: ", a$p.value, "\n")
+cat("P-value of the correlation coefficient between BASE_PRICE and UPC: ", b$p.value, "\n")
+cat("P-value of the correlation coefficient between BASE_PRICE and MANUFACTURER: ", c$p.value, "\n")
+cat("P-value of the correlation coefficient between PRICE and UPC: ", c$p.value, "\n")
+cat("P-value of the correlation coefficient between UPC and MANUFACTURER: ", c$p.value, "\n")
+cat("P-value of the correlation coefficient between FEATURE and DISPLAY: ", c$p.value, "\n")
+```
+
+```{r}
+cat("Lastly, before we look towards the regression analysis, we should check if there is any 
+correlation between some of the variables in the model. Based on the corelation matrix of the 
+grocery data frame, several covariates appear to have a pairwise correlation higher than 0.5 
+(or lower than -0.5 in the case of negative correlation), as follows: BASE_PRICE with PRICE, 
+UPC, MANUFACTURER; PRICE with UPC; UPC with MANUFACTURER; FEATURE with DISPLAY. In regression 
+analysis, this will generate colinearity, which can really affect the robustness of the 
+regression coefficients. Although colinearity does not negate the validity of estimation in 
+regression, it is something that we should account/ verify for and will do so through the 
+introduction of pairwise interactions between variables in the chosen model.", "\n") 
+```
+
+# Section 2.1. Regression models
+```{r, include=FALSE}
+mean_u <- mean(grocery$UNITS)
+var_u <- var(grocery$UNITS)
+mean_log <- mean(grocery_log$UNITS_LOG)
+var_log <- var(grocery_log$UNITS_LOG)
+cat("The mean and variance of the response variable are: ", mean_u, var_u, "\n") 
+cat("The mean and variance of the log transformation of the response variable are: ", 
+    mean_log, var_log, "\n")
+#The data appears to be overdispersed in the case of both the initial response variable
+#and the log transformation of the response variable. This occurs when the variance
+#of the data is higher than its mean and is a phenomenom related to the Poisson
+#distribution, which assumes equal mean and variance of the data. 
+
+par(mfrow = c(2, 2))
+# Poisson model
+model1 <- glm(UNITS ~ BASE_PRICE + PRICE + WEEK_END_DATE + UPC + STORE_NUM + 
+                MANUFACTURER + DISPLAY + FEATURE + TPR_ONLY, 
+                family = poisson(link = "log"), data = grocery)
+plot(model1)
+
+#Stepwise regression on Poisson model
+model2 <- step(model1)
+plot(model2)
+cat("Deviance of the poisson model: ", model2$deviance, "\n")
+
+#Poisson excluding the BASE_PRICE variable
+model3 <- glm(UNITS ~ PRICE + WEEK_END_DATE + UPC + STORE_NUM + 
+              MANUFACTURER + DISPLAY + FEATURE + TPR_ONLY, 
+              family = poisson(link = "log"), data = grocery)
+plot(model3)
+
+#Firstly, the deviance residuals vs linear predictors plot indicates that the assumption 
+#of constant variance does not hold, as the dispersion of residuals increases significantly 
+#with higher predicted values – this is also attested by the scale-location plot. Additionally, the 
+#normal probability plot of standardised deviance residuals suggests that residuals 
+#are not normally distributed and hints towards over dispersion in the upper 
+#quantiles. In this instance, the diagnostic plots suggest that the assumptions 
+#underpinning the calculation of the AIC do not hold, and hence we cannot use 
+#that measure to ascertain the quality of the model. Based on the diagnostic plots 
+#alone, this model appears inappropriate for our data. I have also performed a 
+#stepwise regression (model2), which resulted in the variable STORE_NUM being 
+#eliminated. Although this model generated a slightly lower AIC, the diagnostic 
+#plots again point to the fact that this model does not fit the data. 
+
+# One of the reasons why a generalized linear model with a specified Poisson 
+#family of distributions does not fit the data well is that the Poisson 
+#distribution assumes equal mean and variance, which is certainly not the case 
+#with the response variable in question. Therefore, we proceed to consider two 
+#other families of distributions to account for this characteristic below. The
+#first one is the quasi-poisson family:
+model4 <- glm(UNITS~BASE_PRICE + PRICE + WEEK_END_DATE + UPC+ STORE_NUM + 
+               MANUFACTURER + DISPLAY + FEATURE + TPR_ONLY, 
+             family = quasipoisson(link = "log"), data = grocery)
+plot(model4)
+cat("Deviance of the quasi-poisson model: ", model4$deviance, "\n")
+
+#It appears, based on the diagnostic plots, as though changing the distribution 
+#family value to quasi-poisson does not result in any visible improvement in the 
+#diagnostic plots. The deviance resulting from this model is almost identical to 
+#that resulting from model2 and hence, we do not consider this model to be an
+#improvement to the previous iterations. 
+
+#Further, we also consider a regression model with a negative binomial family of
+#functions. This is often regarded as a possible alternative to a Poisson 
+#distribution with over-dispersed data. Additionally, the histogram of the 
+#response variable (before any transformation) also resembles the shape of a 
+#negative binomial distribution. We will require the "MASS" package in order to
+#run the negative binomial regression and within that, will use the function
+#glm.bn, which is employed in a similar fashion to the glm function we used so far, 
+#only it does not require the specification of a family. 
+library("MASS")
+model5 <- glm.nb(UNITS~BASE_PRICE + PRICE + WEEK_END_DATE + UPC+ STORE_NUM + 
+                    MANUFACTURER + DISPLAY + FEATURE + TPR_ONLY, data = grocery)
+plot(model5)
+cat("Deviance of the negative binomial model: ", model5$deviance, "\n")
+
+#We also perform below a stepwise regression of model5, however no changes are 
+#made to the model. 
+model6 <- step(model5)
+
+#We next explore the log transformation of the response variable and employ
+#a linear model with a family of gaussian distributions and a link function corresponding
+#to the identity
+model7<- glm(UNITS_LOG ~ BASE_PRICE + PRICE + WEEK_END_DATE + UPC
+             + STORE_NUM + MANUFACTURER + DISPLAY + FEATURE+
+               TPR_ONLY, family = gaussian(link = "identity"), data = grocery_log)
+plot(model7)
+cat("Deviance of the ND model: ", model7$deviance, "\n")
+cat("The AIC of the ND model: ", model7$aic, "\n")
+
+#The diagnostic plots point towards an improvement in the model's fit of the data. 
+#The validity of the assumptions of normality and constant variance of residuals
+#appears more robust, particularly as it relates to the Q-Q plot. In comparison 
+#to all previous models, model 7 has a significantly lower deviance of 5290 and 
+#an AIC measure of 22032. This model appears to be the most appropriate choice 
+#for the data in question, in relative terms. 
+
+#Given the high number of covariates, as well as the potential correlations between
+#different pairs (as per Section 1), a potential improvement to the model would be
+#brought by incorporating pairwise interactions of some of the covariates. Based on
+#the analysis performed in Section 1, we will include interactions for the following 
+#pairs (the ones that have been found to have statistically significant correlations):
+#BASE_PRICE vs PRICE, BASE_PRICE vs UPC, BASE_PRICE vs MANUFACTURER, PRICE vs UPC, UPC 
+#vs MANUFACTURER, FEATURE vs DISPLAY. 
+
+model8 <- glm(UNITS_LOG ~ BASE_PRICE + PRICE + WEEK_END_DATE + STORE_NUM + UPC + MANUFACTURER + DISPLAY
+              + FEATURE + TPR_ONLY + BASE_PRICE*PRICE + BASE_PRICE *UPC + BASE_PRICE*MANUFACTURER 
+              +PRICE*UPC + UPC*MANUFACTURER + FEATURE *DISPLAY,family = gaussian(link = "identity"),
+              data = grocery_log)
+plot(model8)
+cat("Deviance of the ND+interactions model: ", model8$deviance, "\n")
+cat("The AIC of the ND+interactions model: ", model8$aic, "\n")
+#We now observe an improvement in both the deviance and the AIC of the 
+#normal distribution model. The diagnostic plots are more in line with what would 
+#suggest that the assumptions of homoskedasticity (residuals vs fitted and the scale-location
+#plots) and normal distribution of residuals (Q-Q plot) are met. We thus conclude
+#that the normal distribution glm with interactions is the optimal choice. 
+
+```
+
+```{r}
+cat("Firstly, we ran a regression within the Poisson family, with a log link function and all 
+given variables included. It is clear from the diagnostic plots that this model does not fit 
+the data, as both the assumption of normality of residuals and that of constant variance of 
+residuals are violated. This could be due to the fact that the response variable is 
+overdispersed, meaning that its variance is higher than its mean. To account for this, we also 
+run a regression model with a quasi-poisson distribution, however there is no evident 
+improvement in either the diagnostic plots of the model or in the deviance measure resulting 
+from this model vs. the initial attempt. Thirdly, given the shape of the distribution of units 
+sold, we also consider a negative binomial model. This is often considered an alternative to 
+the Poisson distribution for overdispersed data.The diagnostic plots point again towards a 
+model that is not fit to our data (heteroskedasticity, non-normally distributed residuals). 
+Violations of the constant variance and normal distribution of residuals invalidate the use 
+of AIC for comparisons. The deviance of this model is 10132, lower than that of previous models.", "\n")
+cat("Lastly, we will explore the log transformation of the response variables. The histogram 
+of the data resembles a normal distribution, therefore the last model considered in this 
+analysis will be a generalized linear model with a family of normal distributions and a log 
+function corresponding to the identity. While this model is a better fit for the data than 
+the previous ones, it is crucial to incorporate the effects of the interactions between 
+variables, given our findings in Section 1. We thus run the following regression model, 
+with the corresponding diagnostic plots below. The assumptions of homoskedasticity and 
+normal distribution of residuals appear to be more robust. This model also results in 
+lower AIC and deviance than the previous model. We thus conclude this model is the 
+optimal choice.", "\n")
+cat("From this model, a number of covariates seem to be negatively related to an increase 
+in sales, namely BASE_PRICE, PRICE, MANUFACTURERS (PL, TMB, TONYS). Equally, the model 
+also suggests that the interactions between BASE_PRICE and the three previously 
+mentioned manufacturers might have a significant impact on sales, however their 
+coefficients are not statistically significant at a 5% significance level.", "\n")
+cat("Regression formula:", "\n")
+print(model8$formula)
+cat("Diagnostic plots:", "\n")
+par(mfrow = c(2, 2))
+plot(model8)
+
+
+```
+
+# Section 2.2. More sophisticated regression analysis
+```{r}
+cat("Despite the greater interpretability of splines/ additive models, it is generally believed 
+that methods like decision trees or gradient boosting are more suitable for prediction in 
+moderate to high dimensions (which is the case of our data here) and therefore, I have elected 
+to focus on CART trees, random forests and gradient boosting in this question.", "\n")
+```
+
+```{r, include = FALSE}
+# CART Trees:
+library("tree")
+model_cart <- tree(UNITS ~ BASE_PRICE + PRICE + WEEK_END_DATE + STORE_NUM+ UPC + MANUFACTURER
+                   + DISPLAY + FEATURE + TPR_ONLY, data = grocery)
+n <- nrow(grocery)
+train_size <- round(2/3 * n)
+train_points <- sample(1:n, train_size)
+train_set <- grocery[train_points, ]
+test_set <- grocery[-train_points, ]
+cart_tree <- tree(UNITS ~ BASE_PRICE + PRICE + WEEK_END_DATE + STORE_NUM+ UPC + as.factor(MANUFACTURER)
+                  + DISPLAY + FEATURE + TPR_ONLY, data = train_set)
+tree_pred <- predict(cart_tree, test_set)
+
+# CART trees with pruning:
+cart_tree_cv <- cv.tree(cart_tree)
+opt_size <- cart_tree_cv$size[which.min(cart_tree_cv$dev)]
+cart_tree_pruned <- prune.tree(cart_tree, best = opt_size)
+prune_pred <- predict(cart_tree_pruned, test_set)
+MAE_cart <- mean(abs(prune_pred - test_set[, 10]))
+MSE_cart <- mean((prune_pred - test_set[, 10])^2)
+cat("Mean absolute error of the CART tree is ", MAE_cart, "\n")
+
+# Random forest
+library(randomForest)
+n <- nrow(grocery)
+#We split the training set in a train set and a validation set:
+train_size <- round(2/3 * n)
+train_points <- sample(1:n, train_size)
+#We then train the forest based on the training size and generate predictions based on 
+#the validation set
+rf_grocery <- randomForest(UNITS ~ BASE_PRICE + PRICE + WEEK_END_DATE + STORE_NUM + UPC 
+                           + MANUFACTURER + DISPLAY + FEATURE + TPR_ONLY, 
+                           data = grocery, subset = train_points, mtry = ncol(grocery)-1 )
+print(rf_grocery)
+rf_grocery_pred <- predict(rf_grocery, newdata = grocery[-train_points,])
+MAE_rf <- mean(abs(rf_grocery_pred - grocery$UNITS[-train_points]))
+MSE_rf <- mean((rf_grocery_pred - grocery$UNITS[-train_points])^2)
+cat("Mean absolute error of the random forest is:", MAE_rf, "\n")
+
+# Gradient boosting
+library("xgboost")
+#Next, we train the model in gb_grocery on the training set and then generate 
+#a prediction on the test set in gb_grocery_pred. 
+grocery$MANUFACTURER <- as.numeric(as.factor(grocery$MANUFACTURER))
+gb_grocery <- xgboost(data = as.matrix(grocery[train_points, -10]), 
+                      label = grocery$UNITS[train_points], nrounds = 100, verbose = FALSE)
+gb_grocery_pred <- predict(gb_grocery, as.matrix(grocery[-train_points, -10]))
+
+#We also perform parameter hypertuning below to find the best number of rounds
+#and the best maximum depth (that minimise the root mean squared error of the 
+#prediction):
+max_depth <- c(5, 7, 10, 13, 15)
+folds <- NULL
+best_error <- Inf
+best_md <- 0
+best_nrounds <- 0
+for (md in max_depth) {
+  gb_grocery_cv <- xgb.cv(data = as.matrix(grocery[, -(10:11)]), label = grocery[, 10], 
+                          nfold = 5, nrounds = 100, max_depth = md, 
+                          folds = folds, verbose = FALSE)
+  if (is.null(folds)) {
+    folds <- gb_grocery_cv$folds
+  }
+  trial_error <- min(gb_grocery_cv$evaluation_log$test_rmse_mean)
+  if (trial_error < best_error) {
+    best_error <- trial_error
+    best_md <- md
+    best_nrounds <- which.min(gb_grocery_cv$evaluation_log$test_rmse_mean)
+  }
+}
+
+#Using the best no of rounds and the best maximum depth, we run the optimum model
+#and generate the optimum prediction below:
+gb_grocery_opt <- xgboost(data = as.matrix(grocery[train_points, -(10:11)]), 
+                          label = grocery$UNITS[train_points], 
+                          nrounds = best_nrounds, max_depth = best_md, verbose = FALSE)
+gb_grocery_opt_pred <- predict(gb_grocery_opt, as.matrix(grocery[-train_points, -(10:11)]))
+MAE_gb <- mean(abs(gb_grocery_opt_pred - grocery$UNITS[-train_points]))
+MSE_gb <- mean((gb_grocery_opt_pred - grocery$UNITS[-train_points]) ^ 2)
+cat("Mean absolute error for optimised XGB:", MAE_gb, "\n")
+
+#Based on the modern regression analysis, we summarize below the mean absolute 
+#errors and the mean squared errors of the models ran:
+modern_regr = data.frame(names = c("CART", "Random forest", "Gradient boosting"), 
+                   MAE = c(MAE_cart, MAE_rf, MAE_gb), MSE = c(MSE_cart, 
+                                                              MSE_rf, MSE_gb))
+gb_importance <- xgb.importance(feature_names = names(grocery[, -(10:11)]), 
+                                model = gb_grocery_opt)
+par(mfrow=c(1,1))
+xgb.plot.importance(gb_importance)
+```
+
+```{r}
+
+cat("Judging by both the mean absolute error and the mean squared error, gradient boosting 
+appears to be the optimal model as it generates the smallest differences between predicted 
+values and actual values (based on the test set), on average. A table summarizing the MAE 
+and MSE for each model is rendered below: ", "\n")
+print(modern_regr)
+
+cat("A possible interpretation of the gradient boosting model is that 3 variables appear to 
+contribute the most to the prediction, namely DISPLAY, PRICE and BASE_PRICE. Intuitively, it 
+is reasonable to believe that the price of a product and the fact that it is part of a 
+promotional display determine sales of that product and even more so, that the actual price 
+charged (PRICE) plays a more significant role than the product's base price (BASE_PRICE). 
+Somewhat unexpectedly, the product's manufacturer does not influence sales significantly, and 
+neither does having the product's price reduced without marketing that action in any way.", "\n")
+
+```
+
+# Section 3. Final model selection
+```{r, include=FALSE}
+#We now perform a 10-fold cross validation analysis to calculate the RMSE of the two models chosen
+#in Section 2: glm with normal distribution and gradient boosting
+n <- nrow(grocery)
+num_folds <- 10
+split <- round(n /num_folds)
+RMSE_gb <- c(rep(0, 10))
+RMSE_regr <- c(rep(0, 10))
+
+for (i in 1:num_folds) {
+  test_points <- sample(1:n, split)
+  train_gb <- grocery[-test_points, ]
+  test_gb <- grocery[test_points, ]
+  train_regr <- grocery_log[-test_points, ]
+  test_regr <- grocery_log[test_points, ]
+  gb_crossval_opt <- xgboost(data = as.matrix(train_gb[ , -10]), 
+                            label = train_gb[, 10], 
+                            nrounds = 100, max_depth = best_md, verbose = FALSE)
+  gb_crossval_opt_pred <- predict(gb_crossval_opt, as.matrix(test_gb[, -10]))
+  RMSE_gb[i] <- (mean((gb_crossval_opt_pred - test_gb[, 10])^2)) ^ 0.5
+  
+  
+  regr_crossval_pred <- predict(model8, newdata = test_regr[, -10])
+  RMSE_regr[i] <- (mean((regr_crossval_pred - test_regr[, 10])^2)) ^ 0.5
+}
+
+RMSE_regr <- as.data.frame(RMSE_regr)
+RMSE_gb <- as.data.frame(RMSE_gb)
+#We will perform a paired t-test to establish whether there is a statistically
+#significant difference in means between the two RMSE samples: the one resulting
+#from the regression model and the one resulting from the gradient boosting method. 
+#The designated significance level is 5%. 
+mean_comp <- t.test(RMSE_regr, RMSE_gb, var.equal = TRUE)
+print(mean_comp)
+cat("The p-value of the t-test is ", mean_comp$p.value, "\n")
+#With a p-value that is significantly lower than 5%, we reject the null hypothesis 
+#stating that there is no difference in the means of the two errors. We also
+#test the hypothesis that the means of the RMSE resulting from the regression 
+#model is greater than that of the RMSE resulting from the gradient boosting. 
+mean_gr <- t.test(RMSE_regr, RMSE_gb, alternative = "greater", var.equal = TRUE)
+print(mean_gr)
+cat("The p-value of the t-test is ", mean_gr$p.value, "\n")
+#With a p-value significantly lower than 5%, we again reject the null hypothesis
+#and can conclude that the mean of the RMSE resulted from the regression analysis 
+#is higher than that of the RMSE resulted from the gradient boosting method.
+```
+
+```{r}
+meanRMSE_regr <- mean(RMSE_regr$RMSE_regr)
+meanRMSE_gb <- mean(RMSE_gb$RMSE_gb)
+cat("The means of the RMSEs corresponding to the two models elected in Section 2 are: ", "\n", 
+    round(meanRMSE_regr, digits = 2), "(regression model), ", round(meanRMSE_gb,digits =2), "(gradient boosting).", "\n")
+cat("We performed a 10-fold cross validation computation to generate 10 different values for 
+the RMSEs of each the regression model and the gradient boosting method. On the back of the 
+t-tests performed on the two RMSE data sets, we can conclude that the mean RMSE resulting from 
+the regression model is higher.", "\n")
+cat("The main advantages of the linear regression model are interpretability and ease of 
+implementation in practice. Given that prediction is our focus in this scenario however, the 
+disadvantages of linear regression weigh heavier on the decision of which model to choose. 
+Its robustness is questioned by 1. existing colinearity between some of the explanatory 
+variables and 2. the absence of a linear relationship between the response variable and some 
+of the covariates (e.g. price vs units sold follows a clearly non-linear curve). The latter 
+impacts the model's prediction power significantly, as can be seen by the higher RMSE compared 
+to that of the gradient boosting model. On the other hand, the main advantage of gradient 
+boosting is its increased predictive accuracy. This method is particularly effective in 
+high dimensions and with large datasets, which is the case in our current scenario. 
+However, gradient boosting can be slower to implement and more expensive when compared to 
+regression models as it requires large datasets that can be difficult/ expensive to acquire. 
+On the basis of its superior predictive accuracy, we conclude that gradient boosting with 
+hyperparamter tuning is the final elected model to use. Below we analyze its output and aim 
+to interpret its results.", "\n")
+```
+
+# Section 4. Prediction estimate
+```{r, include=FALSE}
+#The table below represents a reflection of the gradient boosting model. 
+print(gb_importance)
+```
+
+```{r}
+cat("A brief interpretation of the gradient boosting method suggests that DISPLAY, PRICE AND 
+BASE_PRICE have the largest contribution to the reduction in RMSE , while it is interesting to 
+see that certain variables, such as the UPC, TPR_ONLY, MANUFACTURER contribute very little in 
+that regard. Additionally, variables such as PRICE, BASE_PRICE and DISPLAY also have a 
+significant impact on the prediction of sales, all of which appear to be positively correlated 
+to an increase in sales. This suggests, for instance, that displaying the product in store 
+as part of a promotion could generate an increase in sales of just over 3%. ", "\n")
+
+#We will next proceed to estimate the average effect of decreasing price
+#by 10% on product with UPC = 7192100337, during WEEK_END_DATE = 39995 at 
+#STORE_NUM = 8263 as follows:
+grocery_new <- grocery[grocery$UPC_7192100337 == 1, ]
+grocery_new <- grocery_new[grocery_new$WEEK_END_DATE == 39995 & grocery_new$STORE_NUM == 8263, ]
+price_new <- grocery_new$PRICE * 0.9
+grocery_new$PRICE <- price_new
+grocery_new$MANUFACTURER <- as.numeric(as.factor(grocery_new$MANUFACTURER))
+units_pred <- predict(gb_grocery_opt, as.matrix(grocery_new[, -(10:11)])) 
+impact_pred <- round(units_pred/ grocery_new$UNITS - 1, digits = 2)
+impact_perc <- (impact_pred * 100) 
+
+cat("Similarly, our analysis suggests that the impact of a 10% reduction in price, keeping 
+all else constant is: ", impact_pred, ", corresponding to a reduction of ", impact_perc, "% in units sold.", "\n")
+#The impact of a 10% reduction in price on product with UPC 7192100337, during 
+#WEEK_END_DATE 39995 at STORE_NUM 8263 is a reduction in units sold.
+```
+
+
+
+
